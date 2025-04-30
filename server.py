@@ -3,32 +3,32 @@ import socket
 import time
 from machine import Pin, ADC
 import dht
-
+ 
 # Wi-Fi připojení s timeoutem
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
-    wlan.connect("zabry", "zabry000")
-
+    wlan.connect("zabry","zabry000")
+ 
     timeout = 10  # čekat max 10 sekund
     while not wlan.isconnected() and timeout > 0:
         print("⏳ Připojuji se k Wi-Fi...")
         time.sleep(1)
         timeout -= 1
-
+ 
     if wlan.isconnected():
         print("✅ Připojeno:", wlan.ifconfig())
         return wlan.ifconfig()[0]
     else:
         print("❌ Nepodařilo se připojit k Wi-Fi.")
         return "0.0.0.0"  # Vrátí IP 0.0.0.0, pokud není připojeno
-
+ 
 # Inicializace komponent
 sensor = dht.DHT11(Pin(15))
 moisture = ADC(Pin(26))
 relay = Pin(16, Pin.OUT)
 relay.off()
-
+ 
 # HTML stránka
 def web_page(temp, hum, soil, auto):
     return f"""<!DOCTYPE html>
@@ -56,7 +56,7 @@ def web_page(temp, hum, soil, auto):
     </form>
 </body>
 </html>"""
-
+ 
 # Spuštění webserveru
 ip = connect_wifi()
 addr = socket.getaddrinfo(ip, 80)[0][-1]
@@ -64,11 +64,11 @@ s = socket.socket()
 s.bind(addr)
 s.listen(1)
 print("🌐 Server běží na http://", ip)
-
+ 
 # Parametry
 auto_watering = True
 THRESHOLD = 30000  # Práh pro suchou půdu (0–65535)
-
+ 
 # Hlavní smyčka
 while True:
     try:
@@ -76,7 +76,7 @@ while True:
         print("🔗 Připojeno od", addr)
         request = cl.recv(1024).decode()
         print("📩 Request:", request)
-
+ 
         # Čtení senzorů
         try:
             sensor.measure()
@@ -86,29 +86,31 @@ while True:
             temp = "N/A"
             hum = "N/A"
             print("❌ Chyba čtení DHT11:", e)
-
+ 
         soil = moisture.read_u16()
         print(f"📊 Půdní vlhkost: {soil}")
-
+ 
         # Spuštění zalévání na vyžádání
         if "/water" in request:
             print("💧 Ruční zalévání...")
             relay.on()
             time.sleep(2)
             relay.off()
-
+ 
         # Automatické zalévání
         if auto_watering and isinstance(soil, int) and soil < THRESHOLD:
             print("⚠️ Sucho! Zalévám automaticky.")
             relay.on()
             time.sleep(2)
             relay.off()
-
+ 
         # Odeslání odpovědi (HTML)
         response = web_page(temp, hum, soil, auto_watering)
         cl.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
         cl.send(response)
         cl.close()
-
+ 
     except Exception as e:
         print("💥 Chyba:", e)
+ 
+ 
