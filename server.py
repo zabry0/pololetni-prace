@@ -3,42 +3,42 @@ import socket
 import time
 from machine import Pin, ADC
 import dht
-
+ 
 # Připojení k Wi-Fi
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     wlan.connect("zabry", "zabry000")
-
+ 
     timeout = 10
     while not wlan.isconnected() and timeout > 0:
         time.sleep(1)
         timeout -= 1
-
+ 
     if wlan.isconnected():
         ip = wlan.ifconfig()[0]
         print(f"http://{ip}:8085")
         return ip
     else:
         return "0.0.0.0"
-
+ 
 # Inicializace senzorů a výstupů
 sensor = dht.DHT11(Pin(0))       # DHT11 na GPIO0
 moisture = ADC(Pin(28))          # Půdní vlhkost (např. GPIO28 na Pico W)
-relay = Pin(3, Pin.OUT)          # Relé na GPIO3
+relay = Pin(17, Pin.OUT)          # Relé na GPIO17
 relay.off()
-
+ 
 # Automatické zalévání
 auto_watering = True
 MIN_ADC = 60000  # suchá půda
 MAX_ADC = 10000  # mokrá půda
-
+ 
 def convert_to_percent(adc_value):
     if adc_value is None:
         return "N/A"
     adc_value = max(min(adc_value, MIN_ADC), MAX_ADC)
     return round((adc_value - MAX_ADC) / (MIN_ADC - MAX_ADC) * 100)
-
+ 
 # Web stránka s zeleným designem
 def web_page(temp, hum, soil, auto):
     auto_status = "ANO" if auto else "NE"
@@ -120,28 +120,28 @@ def web_page(temp, hum, soil, auto):
   </div>
 </body>
 </html>"""
-
-
+ 
+ 
 # Spuštění serveru
 ip = connect_wifi()
 addr = socket.getaddrinfo(ip, 8085)[0][-1]
 s = socket.socket()
 s.bind(addr)
 s.listen(1)
-
+ 
 while True:
     try:
         cl, addr = s.accept()
         request = cl.recv(1024).decode()
-
+ 
         if "GET /water" in request:
             relay.on()
             time.sleep(2)
             relay.off()
-
+ 
         elif "GET /toggle_auto" in request:
             auto_watering = not auto_watering
-
+ 
         try:
             sensor.measure()
             temp = sensor.temperature()
@@ -149,22 +149,22 @@ while True:
         except:
             temp = "N/A"
             hum = "N/A"
-
+ 
         try:
             raw = moisture.read_u16()
             soil = convert_to_percent(raw)
         except:
             soil = "N/A"
-
+ 
         if auto_watering and isinstance(soil, (int, float)) and soil < 30:
             relay.on()
             time.sleep(2)
             relay.off()
-
+ 
         response = web_page(temp, hum, soil, auto_watering)
         cl.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n")
         cl.send(response)
         cl.close()
-
+ 
     except:
         pass
